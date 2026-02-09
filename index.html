@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <title>Romantic Glowing 3D Rose</title>
+  <style>
+    :root{
+      --bgTop:#0a0509; --bgMid:#1a0712; --bgBot:#07030a;
+      --g1: rgba(255, 40, 80, .22);
+      --g2: rgba(255, 30, 70, .45);
+      --g3: rgba(255, 160, 190, .28);
+    }
+    html, body { height:100%; margin:0; }
+    body{
+      overflow:hidden;
+      background:
+        radial-gradient(900px 700px at 50% 30%, rgba(255, 80, 130, .14), transparent 60%),
+        radial-gradient(700px 500px at 20% 70%, rgba(255, 30, 70, .10), transparent 65%),
+        radial-gradient(700px 500px at 80% 70%, rgba(180, 40, 120, .10), transparent 65%),
+        linear-gradient(180deg, var(--bgTop), var(--bgMid) 55%, var(--bgBot));
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:#fff;
+    }
+    canvas{ position:fixed; inset:0; width:100%; height:100%; display:block; }
+    .bokeh{
+      position:fixed; inset:-30%;
+      pointer-events:none; opacity:.55; filter: blur(0.6px);
+      background:
+        radial-gradient(circle at 12% 28%, rgba(255,150,180,.18) 0 12px, transparent 14px),
+        radial-gradient(circle at 20% 70%, rgba(255, 80,120,.16) 0 18px, transparent 22px),
+        radial-gradient(circle at 35% 40%, rgba(255,220,235,.12) 0 10px, transparent 14px),
+        radial-gradient(circle at 56% 22%, rgba(255,120,150,.16) 0 20px, transparent 26px),
+        radial-gradient(circle at 68% 65%, rgba(255, 70,110,.14) 0 22px, transparent 30px),
+        radial-gradient(circle at 82% 35%, rgba(255,210,230,.10) 0 14px, transparent 18px),
+        radial-gradient(circle at 88% 78%, rgba(255,100,140,.12) 0 18px, transparent 24px);
+      animation: drift 22s linear infinite;
+    }
+    @keyframes drift{
+      from { transform: translate3d(0,0,0) rotate(0deg); }
+      to   { transform: translate3d(-5%, 4%, 0) rotate(6deg); }
+    }
+    .pill{
+      position:fixed; left:50%; transform:translateX(-50%);
+      font-size:14px; opacity:.82; padding:10px 14px; border-radius:999px;
+      background: rgba(0,0,0,.22);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.10);
+      user-select:none;
+    }
+    #ui{ bottom:16px; }
+    #status{ top:16px; font-size:13px; opacity:.68; background: rgba(0,0,0,.18); border-color: rgba(255,255,255,.08); }
+    @media (prefers-reduced-motion: reduce){ .bokeh{ animation:none; } }
+  </style>
+</head>
+<body>
+  <div class="bokeh"></div>
+  <div class="pill" id="status">Loading rose…</div>
+  <div id="ui">Drag to rotate • Scroll to zoom • Watch it slowly bloom 🌹</div>
+  <canvas id="c"></canvas>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+    import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+    import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+    import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+    const statusEl = document.getElementById("status");
+    const canvas = document.getElementById("c");
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+
+    const scene = new THREE.Scene();
+
+    // reflections without HDR downloads
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+
+    const camera = new THREE.PerspectiveCamera(35, innerWidth/innerHeight, 0.1, 100);
+    camera.position.set(0.0, 0.55, 2.2);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.minDistance = 1.1;
+    controls.maxDistance = 4.5;
+    controls.target.set(0, 0.35, 0);
+
+    // romantic lights
+    scene.add(new THREE.AmbientLight(0xffc2d1, 0.55));
+    const key = new THREE.DirectionalLight(0xffffff, 2.0);
+    key.position.set(1.2, 2.2, 1.8);
+    scene.add(key);
+
+    const rim = new THREE.PointLight(0xff2f63, 45, 20);
+    rim.position.set(-1.4, 0.9, -1.3);
+    scene.add(rim);
+
+    const fill = new THREE.PointLight(0xff9bb6, 18, 20);
+    fill.position.set(1.4, 0.25, 1.2);
+    scene.add(fill);
+
+    // bloom glow
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.05, 0.55, 0.18);
+    composer.addPass(bloom);
+
+    let root = null, meshes = [];
+    let targetScale = 1, introStart = null;
+    const INTRO_MS = 1400;
+
+    // GLTF loading with blooming animation
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+    
+    const petalData = []; // Store petal data for animation
+
+    function collectPetalsForBloom(obj) {
+      meshes = [];
+      obj.traverse((child) => {
+        if (child.isMesh) {
+          meshes.push(child);
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          for (const m of mats) {
+            if (!m) continue;
+            
+            // Check if this is likely a petal
+            const isPetal = (m.name || "").toLowerCase().includes("petal") || 
+                           (child.name || "").toLowerCase().includes("petal") ||
+                           m.color?.r > 0.5; // Reddish objects are likely petals
+            
+            if (isPetal) {
+              // Store petal info for blooming
+              petalData.push({
+                mesh: child,
+                finalPosition: child.position.clone(),
+                finalRotation: child.rotation.clone(),
+                finalScale: child.scale.clone(),
+                // Start position - closer to center and higher up
+                startPosition: new THREE.Vector3(
+                  child.position.x * 0.15,
+                  Math.max(child.position.y, 0.3),
+                  child.position.z * 0.15
+                ),
+                startRotation: new THREE.Euler(0.1, child.rotation.y, child.rotation.z)
+              });
+              
+              // Set initial closed state
+              child.position.copy(petalData[petalData.length - 1].startPosition);
+              child.rotation.copy(petalData[petalData.length - 1].startRotation);
+            }
+            
+            if ("emissive" in m) {
+              m.emissive = new THREE.Color(isPetal ? 0x6a0017 : 0x150008);
+              m.emissiveIntensity = isPetal ? 0.8 : 0.25;
+            }
+            m.needsUpdate = true;
+          }
+        }
+      });
+    }
+
+    function fitAndCenter(obj) {
+      const box = new THREE.Box3().setFromObject(obj);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      box.getSize(size);
+      box.getCenter(center);
+
+      obj.position.sub(center);
+      const maxDim = Math.max(size.x, size.y, size.z);
+      targetScale = 1.25 / maxDim;
+
+      obj.scale.setScalar(targetScale * 0.88);
+      obj.position.y -= 0.07;
+    }
+
+    // Load the GLTF rose model
+    const loader = new GLTFLoader();
+    const MODEL_URL = "./scene.gltf";
+    
+    loader.load(
+      MODEL_URL,
+      (gltf) => {
+        root = gltf.scene;
+        scene.add(root);
+        fitAndCenter(root);
+        collectPetalsForBloom(root);
+        bloomStart = performance.now();
+        introStart = bloomStart;
+        statusEl.textContent = "Loaded ✓";
+        setTimeout(() => statusEl.style.display = "none", 800);
+      },
+      (xhr) => {
+        if (xhr.total) {
+          const pct = Math.round((xhr.loaded / xhr.total) * 100);
+          statusEl.textContent = `Loading rose… ${pct}%`;
+        }
+      },
+      (err) => {
+        console.error(err);
+        statusEl.textContent = "Could not load the model";
+        alert("Could not load scene.gltf. Make sure index.html, scene.gltf, scene.bin, and textures/ are in the same folder.");
+      }
+    );
+    
+    //Blooming animation setup
+    let bloomStart = performance.now();
+    const BLOOM_DURATION = 6000; // 6 seconds to fully bloom
+
+    addEventListener("resize", ()=>{
+      camera.aspect = innerWidth/innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+      composer.setSize(innerWidth, innerHeight);
+      bloom.setSize(innerWidth, innerHeight);
+    });
+
+    const clock = new THREE.Clock();
+
+    function animate(){
+      requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+
+      // slow glow pulse
+      const pulse = 0.5 + 0.5 * Math.sin(t * 0.55);
+      bloom.strength = 0.85 + 0.55 * pulse;
+      bloom.radius = 0.52;
+
+      // pulse emissive
+      for (const mesh of meshes){
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const m of mats){
+          if (m && "emissiveIntensity" in m){
+            const isPetal = (m.name || "").toLowerCase().includes("petal");
+            const base = isPetal ? 0.75 : 0.22;
+            const amp  = isPetal ? 0.55 : 0.15;
+            m.emissiveIntensity = base + amp * pulse;
+          }
+        }
+      }
+
+      // Blooming animation - petals slowly open
+      const bloomProgress = Math.min(1, (performance.now() - bloomStart) / BLOOM_DURATION);
+      if (bloomProgress < 1 && petalData.length > 0) {
+        // Smooth easing function for natural blooming
+        const ease = 1 - Math.pow(1 - bloomProgress, 3);
+        
+        // Animate each petal
+        for (const petalInfo of petalData) {
+          const petal = petalInfo.mesh;
+          
+          // Gradually move petals to their final positions
+          petal.position.x = THREE.MathUtils.lerp(petalInfo.startPosition.x, petalInfo.finalPosition.x, ease);
+          petal.position.y = THREE.MathUtils.lerp(petalInfo.startPosition.y, petalInfo.finalPosition.y, ease);
+          petal.position.z = THREE.MathUtils.lerp(petalInfo.startPosition.z, petalInfo.finalPosition.z, ease);
+          
+          // Gradually rotate petals open
+          petal.rotation.x = THREE.MathUtils.lerp(petalInfo.startRotation.x, petalInfo.finalRotation.x, ease);
+          petal.rotation.y = THREE.MathUtils.lerp(petalInfo.startRotation.y, petalInfo.finalRotation.y, ease);
+          petal.rotation.z = THREE.MathUtils.lerp(petalInfo.startRotation.z, petalInfo.finalRotation.z, ease);
+        }
+        
+        // Scale up the whole rose slightly as it blooms
+        if (root) {
+          root.scale.setScalar(THREE.MathUtils.lerp(targetScale * 0.75, targetScale, ease));
+        }
+        
+        // Update status message
+        if (bloomProgress < 0.95) {
+          statusEl.textContent = "Rose blooming...";
+          statusEl.style.display = "";
+        } else {
+          statusEl.textContent = "Bloomed ✓";
+        }
+      } else if (bloomProgress >= 1 && statusEl.style.display !== "none" && petalData.length > 0) {
+        setTimeout(() => statusEl.style.display = "none", 1000);
+      }
+
+      // gentle auto rotate
+      if (root) root.rotation.y = 0.22 * Math.sin(t * 0.22);
+
+      controls.update();
+      composer.render();
+    }
+    animate();
+  </script>
+</body>
+</html>
